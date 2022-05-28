@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"github.com/lus/jacques/internal/config"
 	"github.com/lus/jacques/internal/discord"
+	"github.com/lus/jacques/internal/storage/postgres"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"os"
@@ -22,6 +24,19 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("could not load configuration")
 	}
+
+	// Establish the PostgreSQL connection
+	log.Info().Msg("connecting to database...")
+	driver := postgres.New(cfg.PostgresDSN)
+	if err := driver.Initialize(context.Background()); err != nil {
+		log.Fatal().Err(err).Msg("could not connect to database")
+	}
+	defer func() {
+		log.Info().Msg("disconnecting from database...")
+		if err := driver.Close(); err != nil {
+			log.Warn().Err(err).Msg("could not disconnect from database")
+		}
+	}()
 
 	// Start the Discord service
 	log.Info().Msg("connecting to gateway...")

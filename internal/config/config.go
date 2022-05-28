@@ -7,7 +7,8 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	BotToken string `split_words:"true"`
+	BotToken    string `split_words:"true"`
+	PostgresDSN string `split_words:"true"`
 }
 
 // LoadFromEnv loads the configuration using environment variables or/and a .env file
