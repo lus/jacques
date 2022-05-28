@@ -6,7 +6,9 @@ import (
 )
 
 // Config represents the application configuration
-type Config struct{}
+type Config struct {
+	BotToken string `split_words:"true"`
+}
 
 // LoadFromEnv loads the configuration using environment variables or/and a .env file
 func LoadFromEnv() (*Config, error) {

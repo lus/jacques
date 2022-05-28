@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/lus/jacques/internal/config"
+	"github.com/lus/jacques/internal/discord"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"os"
@@ -21,7 +22,24 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("could not load configuration")
 	}
-	_ = cfg
+
+	// Start the Discord service
+	log.Info().Msg("connecting to gateway...")
+	dcService := &discord.Service{
+		BotToken: cfg.BotToken,
+	}
+	if err := dcService.Start(); err != nil {
+		log.Fatal().Err(err).Msg("could not connect to gateway")
+	}
+	defer func() {
+		log.Info().Msg("disconnecting from gateway...")
+		if err := dcService.Stop(); err != nil {
+			log.Warn().Err(err).Msg("could not disconnect from gateway")
+		}
+	}()
+
+	// Done!
+	log.Info().Msg("done!")
 
 	// Wait for the application to be terminated
 	shutdown := make(chan os.Signal, 1)
