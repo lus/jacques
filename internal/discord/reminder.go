@@ -1,11 +1,21 @@
 package discord
 
 import (
+	"context"
+	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/hako/durafmt"
+	"github.com/lus/jacques/internal/reminder"
+	"github.com/rs/zerolog/log"
 	"github.com/zekrotja/ken"
+	"strconv"
+	"strings"
+	"time"
 )
 
-type ReminderCommand struct{}
+type ReminderCommand struct {
+	Repository reminder.Repository
+}
 
 var _ ken.SlashCommand = (*ReminderCommand)(nil)
 
@@ -92,11 +102,30 @@ func (cmd *ReminderCommand) listCommand(ctx *ken.SubCommandCtx) error {
 
 func (cmd *ReminderCommand) createCommand(ctx *ken.SubCommandCtx) error {
 	ctx.SetEphemeral(true)
-	return ctx.Respond(&discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "soon:tm:",
-		},
+
+	dur, err := time.ParseDuration(ctx.Options().GetByName("when").StringValue())
+	if err != nil {
+		return ctx.RespondError("The given duration is malformed.", "Invalid Duration")
+	}
+	description := strings.ReplaceAll(ctx.Options().GetByName("description").StringValue(), "`", "'")
+	userID, _ := strconv.ParseInt(ctx.Event.Member.User.ID, 10, 64)
+	channelID, _ := strconv.ParseInt(ctx.Event.ChannelID, 10, 64)
+
+	rem, err := cmd.Repository.Create(context.Background(), &reminder.Create{
+		UserID:      userID,
+		ChannelID:   channelID,
+		Description: description,
+		Delta:       dur,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("could not create reminder")
+		return ctx.RespondError("An error occurred while creating the reminder.", "Error")
+	}
+
+	return ctx.RespondEmbed(&discordgo.MessageEmbed{
+		Title:       "Success",
+		Description: fmt.Sprintf("Your reminder `%s` will fire in %s.", rem.ID, durafmt.Parse(dur)),
+		Color:       0x00ff00,
 	})
 }
 
@@ -108,4 +137,20 @@ func (cmd *ReminderCommand) deleteCommand(ctx *ken.SubCommandCtx) error {
 			Content: "soon:tm:",
 		},
 	})
+}
+
+func (service *Service) fireReminder(rem *reminder.Reminder) {
+	_, err := service.session.ChannelMessageSendComplex(strconv.FormatInt(rem.ChannelID, 10), &discordgo.MessageSend{
+		Content: "<@" + strconv.FormatInt(rem.UserID, 10) + ">",
+		Embeds: []*discordgo.MessageEmbed{
+			{
+				Title:       "Reminder",
+				Description: "```" + rem.Description + "```",
+				Color:       0xffff00,
+			},
+		},
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("could not send reminder message")
+	}
 }

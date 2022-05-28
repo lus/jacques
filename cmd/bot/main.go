@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/lus/jacques/internal/config"
 	"github.com/lus/jacques/internal/discord"
+	"github.com/lus/jacques/internal/reminder"
 	"github.com/lus/jacques/internal/storage/postgres"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -38,10 +39,19 @@ func main() {
 		}
 	}()
 
+	// Create and start the reminder watcher
+	watcher := &reminder.Watcher{
+		Repo: driver.Reminders(),
+	}
+	watcher.Start()
+	defer watcher.Stop()
+
 	// Start the Discord service
 	log.Info().Msg("connecting to gateway...")
 	dcService := &discord.Service{
-		BotToken: cfg.BotToken,
+		BotToken:        cfg.BotToken,
+		Storage:         driver,
+		ReminderWatcher: watcher,
 	}
 	if err := dcService.Start(); err != nil {
 		log.Fatal().Err(err).Msg("could not connect to gateway")

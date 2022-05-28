@@ -3,12 +3,16 @@ package discord
 import (
 	"errors"
 	"github.com/bwmarrin/discordgo"
+	"github.com/lus/jacques/internal/reminder"
+	"github.com/lus/jacques/internal/storage"
 	"github.com/zekrotja/ken"
 )
 
 // Service represents the service handling the interaction with the Discord gateway
 type Service struct {
-	BotToken string
+	BotToken        string
+	Storage         storage.Driver
+	ReminderWatcher *reminder.Watcher
 
 	session  *discordgo.Session
 	commands *ken.Ken
@@ -32,7 +36,12 @@ func (service *Service) Start() error {
 		return err
 	}
 	err = commands.RegisterCommands(
-		new(ReminderCommand),
+		&ReminderCommand{
+			Repository: &reminder.WatcherResettingRepository{
+				Wrapping: service.Storage.Reminders(),
+				Watcher:  service.ReminderWatcher,
+			},
+		},
 	)
 	if err != nil {
 		return err
@@ -45,6 +54,7 @@ func (service *Service) Start() error {
 
 	service.session = session
 	service.commands = commands
+	service.ReminderWatcher.Subscribe(service.fireReminder)
 
 	return nil
 }

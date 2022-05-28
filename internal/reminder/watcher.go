@@ -10,7 +10,7 @@ type Callback func(fired *Reminder)
 
 // Watcher represents the service that watches reminders and executes fire events
 type Watcher struct {
-	repo *watcherResettingRepository
+	Repo Repository
 
 	callbacks []Callback
 
@@ -19,17 +19,6 @@ type Watcher struct {
 
 	running bool
 	stop    chan struct{}
-}
-
-// NewWatcher creates a new reminder watcher
-func NewWatcher(repo Repository) *Watcher {
-	watcher := &Watcher{
-		repo: &watcherResettingRepository{
-			wrapping: repo,
-		},
-	}
-	watcher.repo.watcher = watcher
-	return watcher
 }
 
 // Start starts watching for reminders to fire
@@ -45,7 +34,7 @@ func (watcher *Watcher) Start() {
 				return
 			default:
 				if watcher.next == nil && time.Until(watcher.minFetchAt) <= 0 {
-					next, err := watcher.repo.GetNext(context.Background())
+					next, err := watcher.Repo.GetNext(context.Background())
 					if err != nil {
 						log.Error().Err(err).Msg("could not fetch next reminder")
 						watcher.minFetchAt = time.Now().Add(30 * time.Second)
@@ -57,7 +46,7 @@ func (watcher *Watcher) Start() {
 					for _, callback := range watcher.callbacks {
 						callback(watcher.next)
 					}
-					if err := watcher.repo.DeleteByID(context.Background(), watcher.next.ID); err != nil {
+					if err := watcher.Repo.DeleteByID(context.Background(), watcher.next.ID); err != nil {
 						log.Error().Err(err).Msg("could not delete fired reminder")
 					}
 					watcher.Reset()
