@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/hako/durafmt"
+	"github.com/karrick/tparse/v2"
 	"github.com/lus/jacques/internal/reminder"
 	"github.com/rs/zerolog/log"
 	"github.com/zekrotja/ken"
@@ -103,9 +104,11 @@ func (cmd *ReminderCommand) listCommand(ctx *ken.SubCommandCtx) error {
 func (cmd *ReminderCommand) createCommand(ctx *ken.SubCommandCtx) error {
 	ctx.SetEphemeral(true)
 
-	dur, err := time.ParseDuration(ctx.Options().GetByName("when").StringValue())
+	dur, err := tparse.AbsoluteDuration(time.Now(), ctx.Options().GetByName("when").StringValue())
 	if err != nil {
 		return ctx.RespondError("The given duration is malformed.", "Invalid Duration")
+	} else if dur <= 0 {
+		return ctx.RespondError("The given duration is negative.", "Invalid Duration")
 	}
 	description := strings.ReplaceAll(ctx.Options().GetByName("description").StringValue(), "`", "'")
 	userID, _ := strconv.ParseInt(ctx.Event.Member.User.ID, 10, 64)
