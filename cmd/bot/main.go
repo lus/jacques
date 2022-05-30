@@ -39,12 +39,10 @@ func main() {
 		}
 	}()
 
-	// Create and start the reminder watcher
+	// Create the reminder watcher
 	watcher := &reminder.Watcher{
 		Repo: driver.Reminders(),
 	}
-	watcher.Start()
-	defer watcher.Stop()
 
 	// Start the Discord service
 	log.Info().Msg("connecting to gateway...")
@@ -62,6 +60,10 @@ func main() {
 			log.Warn().Err(err).Msg("could not disconnect from gateway")
 		}
 	}()
+
+	// Start the reminder watcher
+	watcher.Start()
+	defer watcher.Stop()
 
 	// Done!
 	log.Info().Msg("done!")

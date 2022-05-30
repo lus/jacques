@@ -14,9 +14,6 @@ type Watcher struct {
 
 	callbacks []Callback
 
-	next       *Reminder
-	minFetchAt time.Time
-
 	running bool
 	stop    chan struct{}
 }
@@ -27,30 +24,33 @@ func (watcher *Watcher) Start() {
 		return
 	}
 	watcher.stop = make(chan struct{})
+
+	// Retrieve the next reminder
+	next, err := watcher.Repo.GetNext(context.Background())
+	if err != nil {
+		log.Error().Err(err).Msg("could not fetch next reminder")
+		watcher.Stop()
+		return
+	}
+	if next == nil {
+		watcher.Stop()
+		return
+	}
+
 	go func() {
 		for {
 			select {
 			case <-watcher.stop:
 				return
-			default:
-				if watcher.next == nil && time.Until(watcher.minFetchAt) <= 0 {
-					next, err := watcher.Repo.GetNext(context.Background())
-					if err != nil {
-						log.Error().Err(err).Msg("could not fetch next reminder")
-						watcher.minFetchAt = time.Now().Add(30 * time.Second)
-					} else if next == nil {
-						watcher.minFetchAt = time.Now().Add(time.Minute)
-					}
-					watcher.next = next
-				} else if watcher.next != nil && time.Until(time.Unix(watcher.next.FiresAt, 0)) <= 0 {
-					for _, callback := range watcher.callbacks {
-						callback(watcher.next)
-					}
-					if err := watcher.Repo.DeleteByID(context.Background(), watcher.next.ID); err != nil {
-						log.Error().Err(err).Msg("could not delete fired reminder")
-					}
-					watcher.Reset()
+			case <-time.After(time.Until(time.Unix(next.FiresAt, 0))):
+				for _, callback := range watcher.callbacks {
+					callback(next)
 				}
+				if err := watcher.Repo.DeleteByID(context.Background(), next.ID); err != nil {
+					log.Error().Err(err).Msg("could not delete reminder")
+				}
+				watcher.Reset()
+				return
 			}
 		}
 	}()
@@ -68,8 +68,8 @@ func (watcher *Watcher) Stop() {
 
 // Reset resets the cached next reminder
 func (watcher *Watcher) Reset() {
-	watcher.next = nil
-	watcher.minFetchAt = time.Unix(0, 0)
+	watcher.Stop()
+	watcher.Start()
 }
 
 // Subscribe registers a callback for reminder fire events
